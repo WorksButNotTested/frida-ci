@@ -35,10 +35,10 @@ RUN apt-get update \
 RUN cd /usr/local/src/ \
 	&& mkdir /opt/frida/ \
 	&& git clone https://github.com/frida/frida.git \
-	&& pushd frida \
+	&& cd frida \
 		&& make -f Makefile.sdk.mk FRIDA_HOST=linux-arm \
-		&& mv build/sdk-linux-arm.tar.gz /opt/frida/ \
-	&& popd \
+		&& mv build/sdk-linux-arm.tar.bz2 /opt/frida/ \
+	&& cd - \
 	&& rm -rf frida
 
 #### Build Target System ####
@@ -50,21 +50,21 @@ RUN cd /usr/local/src/ \
 	&& DEBIAN_FRONTEND=noninteractive apt-get install -y $target_build_deps \
 	\
 	&& git clone git://busybox.net/busybox.git \
-	&& pushd busybox \
+	&& cd busybox \
 		&& make defconfig \
 		&& sed -i 's/# CONFIG_STATIC is not set/CONFIG_STATIC=y/g' .config \
 		&& CROSS_COMPILE=/usr/bin/aarch64-linux-gnu- make -j$CORES install \
-	&& popd \
+	&& cd - \
 	\
 	&& mkdir linux \
-	&& pushd linux \
+	&& cd linux \
 		&& curl https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.6.14.tar.xz \
 			| tar -xJf - --strip-components=1 \
 		&& ARCH=arm64 make defconfig \
 		&& sed -i "s/# CONFIG_BINFMT_MISC is not set/CONFIG_BINFMT_MISC=y/g" .config \
 		&& ARCH=arm64 CROSS_COMPILE=/usr/bin/aarch64-linux-gnu- make -j$CORES Image \
 		&& mv arch/arm64/boot/Image /opt/frida/kernel \
-	&& popd \
+	&& cd - \
 	\
 	&& curl https://partner-images.canonical.com/core/focal/current/ubuntu-focal-core-cloudimg-arm64-root.tar.gz \
 		| tar -xzf - -C rootfs --skip-old-files \
@@ -72,10 +72,10 @@ RUN cd /usr/local/src/ \
 	&& genext2fs -U -N 131072 -B 4096 -b 524288 -d rootfs /opt/frida/rootfs \
 	\
 	&& tar -C initrd -cf - . | tar -C busybox/_install -xf - \
-	&& pushd busybox/_install \
+	&& cd busybox/_install \
 		&& mkdir -p proc sys tmp \
 		&& find . | cpio -o -H newc > /opt/frida/initrd \
-	&& popd \
+	&& cd - \
 	\
 	&& mkfifo /opt/frida/monitor.in /opt/frida/monitor.out \
 	&& mkfifo /opt/frida/serial.in /opt/frida/serial.out \
@@ -85,10 +85,9 @@ RUN cd /usr/local/src/ \
 	&& apt-get autoremove -y \
 	&& apt-get clean
 
-WORKDIR /root/
-RUN mkdir ./credentials/
-RUN mkdir ./build/
-VOLUME ["/root/credentials/", "/root/build/"]
+RUN mkdir /opt/frida/creds/
+RUN mkdir /opt/frida/build/
+VOLUME ["/opt/frida/creds/", "/opt/frida/build/"]
 COPY ./scripts/ /opt/
 RUN /opt/target.sh apt-get update
 RUN /opt/target.sh DEBIAN_FRONTEND=noninteractive apt-get install -y \
